@@ -6,11 +6,11 @@ nb=load('brain.mat');
 I = nb.K;
 
 %I=imread('terminal.gif');
-I=im2double(I);
+%I=im2double(I);
 
-its = 500;
-mu = 0.1;
-r = 10;A
+its = 100;
+mu = 10000;
+r = 10;
 dt=0.5;
 Energy = zeros(its,1);
 
@@ -21,6 +21,8 @@ Energy = zeros(its,1);
 [M,N] = size(I);
 spacing = round(r/4);
 basis_box = zeros(2*r+spacing);
+
+%{
 basis_circle = zeros(2*r);
 basis_quart = zeros(r);
 basis_quart(1,ceil(r/2)+1:end) = 1;
@@ -39,6 +41,15 @@ basis_circle(1:r,1:r) = basis_quart;
 basis_circle(1:r,r+1:end) = rot90(basis_quart,3);
 basis_circle(r+1:end,1:r) = rot90(basis_quart);
 basis_circle(r+1:end,r+1:end) = rot90(basis_quart,2);
+%}
+
+basis_circle = zeros(2*r);
+cx = r;
+cy = r;
+[x,y] = meshgrid(1:2*r);
+basis_circle = (cx-x).^2 + (cy-y).^2 <= r^2;
+
+
 basis_box(1:2*r,1:2*r) = basis_circle;
 %basis_box((2*r+spacing):end,(2*r+spacing):end) = 1;
 basis_box = basis_box-0.5;
@@ -55,9 +66,9 @@ for rc = 1:row_copies
 end
 bubbles = bubbles(1:M,1:N);
 
-% Single 
-single_contour = zeros(size(I));
+% Single
 %{
+single_contour = zeros(size(I));
 m1 = ceil(1+(floor(0.9*M))*rand(1));
 m2 = ceil(m1+(floor(0.9*M)-m1)*rand(1));
 n1 = ceil(1+(floor(0.9*N))*rand(1));
@@ -69,8 +80,9 @@ single_contour(10:50,170) = 1;
 single_contour(10:50,100) = 1;
 single_contour = single_contour-0.5;
 %}
+
 cx = round(M/2);
-cy = 50;
+cy = 70;
 R = 50;
 [x,y] = meshgrid(1:max(M,N));
 circ = (x-cx).^2+(y-cy).^2 <= R^2;
@@ -98,7 +110,7 @@ subplot(1,2,2);contour(single_contour,[0,0]);
 
 %-- End
 %% Alg
-contour_type = 's'; % s (single) / b (bubbles)
+contour_type = 'ns'; % s (single) / b (bubbles)
 if lower(contour_type) == 's'
     phi0 = single_contour;
 else
@@ -106,21 +118,22 @@ else
 end
 
 % Values at t = 0
-F = eps; 
-phi = phi0; 
+F = eps;
+phi = phi0;
 
 figure();
 subplot(1,2,1); imshow(I);% hold on; contour(phi0,'b');
 hold on;
 contour(phi, [0 0], 'r');
-title(['0/' num2str(its) ' Iterations']); 
+title(['0/' num2str(its) ' Iterations']);
 hold off;
 drawnow;
 
 for n=1:its
-  % Heaviside and Delta funtions
-  % H1
-  %{
+    % Heaviside and Delta funtions
+    % H1
+    %{
+
   H_eps=10^(-5);  
   H = zeros(size(I)); D = zeros(size(I));
   ind= find(phi>H_eps);
@@ -128,72 +141,77 @@ for n=1:its
   ind1 = find(phi<H_eps & phi>-H_eps);
   for i=1:length(ind1)
       H(ind1(i))=1/2*(1+phi(ind1(i))/H_eps+1/pi*sin(pi*phi(ind1(i))/H_eps));
-      D(ind1(i))=1/(2*H_eps)*(1+cos(pi*phi(ind1(i))/H_eps))+1;
+      %D(ind1(i))=1/(2*H_eps)*(1+cos(pi*phi(ind1(i))/H_eps))+1;
   end
-  %D=1/(2*H_eps).*(1+cos(pi/H_eps.*phi));
-  %}
+  D=1/(2*H_eps).*(1+cos(pi/H_eps.*phi));
+    %}
 
-  % H2
-  %%{
-  H_eps=0.1;  
-  H = zeros(size(I)); %D = zeros(size(I));
-  ind= find(phi>H_eps);
-  H(ind)=1;
-  ind1 = find(phi<H_eps & phi>-H_eps);
-  for i=1:length(ind1)
-      H(ind1(i))=1/2*(1+(2/pi)*atan(phi(ind1(i))/H_eps));
-  end
+    % H2
+    %%{
+    H_eps=0.1;
+    H = zeros(size(I)); %D = zeros(size(I));
+    ind= find(phi>H_eps);
+    H(ind)=1;
+    ind1 = find(phi<H_eps & phi>-H_eps);
+    for i=1:length(ind1)
+        H(ind1(i))=1/2*(1+(2/pi)*atan(phi(ind1(i))/H_eps));
+    end
 
- % H = 1/2.*(1+(2/pi).*atan(phi./H_eps));
-  D = (H_eps/pi)./(H_eps^2+phi.^2);            
-  %%}
+    % H = 1/2.*(1+(2/pi).*atan(phi./H_eps));
+    D = (H_eps/pi)./(H_eps^2+phi.^2);
+    %%}
 
-  % Curvature
-  %phi_pad = padarray(phi,[1,1],1,'pre');
-  %phi_pad = padarray(phi_pad,[1,1],1,'post'); 
-  phi_pad = padarray(phi,[1,1],1,'both'); % getting the 'ghost' points
+    % Curvature
+    %phi_pad = padarray(phi,[1,1],1,'pre');
+    %phi_pad = padarray(phi_pad,[1,1],1,'post');
+    phi_dub = double(phi);
+    phi_pad = padarray(double(phi),[1,1],1,'both'); % getting the 'ghost' points
 
-  % central difference
-  fy = (phi_pad(3:end,2:N+1)-phi_pad(1:M,2:N+1))/2;
-  fx = (phi_pad(2:M+1,3:end)-phi_pad(2:M+1,1:N))/2;
-  fyy = phi_pad(3:end,2:N+1)+phi_pad(1:M,2:N+1)-2*phi;
-  fxx = phi_pad(2:M+1,3:end)+phi_pad(2:M+1,1:N)-2*phi;
-  fxy = (1/4).*(phi_pad(3:end,3:end)-phi_pad(1:M,3:end)+phi_pad(3:end,1:N)-phi_pad(1:M,1:N));
-  K = ((fxx.*fy.^2-2*fxy.*fx.*fy+fyy.*fx.^2)./((fx.^2+fy.^2+eps).^(3/2))).*(fx.^2+fy.^2).^(1/2);
-  K(1,:) = eps;
-  K(end,:) = eps;
-  K(:,1) = eps;
-  K(:,end) = eps;
-  K = K./max(max(abs(K)));
+    % central difference
+    fy = (phi_pad(3:end,2:N+1)-phi_pad(1:M,2:N+1));
+    fx = (phi_pad(2:M+1,3:end)-phi_pad(2:M+1,1:N));
+    fyy = phi_pad(3:end,2:N+1)+phi_pad(1:M,2:N+1)-2*phi_dub;
+    fxx = phi_pad(2:M+1,3:end)+phi_pad(2:M+1,1:N)-2*phi_dub;
+    fxy = (1/4).*(phi_pad(3:end,3:end)-phi_pad(1:M,3:end)+phi_pad(3:end,1:N)-phi_pad(1:M,1:N));
+    K = ((fxx.*fy.^2-2*fxy.*fx.*fy+fyy.*fx.^2)./((fx.^2+fy.^2+eps).^(1.5))).*(fx.^2+fy.^2).^(0.5);
 
-  % Evolution
-  c1 = sum(sum(I.*H))/(sum(sum(phi>=0))+eps); % equation (6)
-  c2 = sum(sum(I.*(1-H)))/(sum(sum(phi<0))+eps); % equation (7) 
-  F = (mu*K-(I-c1).^2+(I-c2).^2); % equation (9)
-  F = F./max(max(abs(F)));
+    K(1,:) = eps;
+    K(end,:) = eps;
+    K(:,1) = eps;
+    K(:,end) = eps;
+    K = K./max(max(abs(K)));
 
-  phi = phi+dt.*D.*F;
-  %phi = phi+dt.*F; %This could work by equation (9) = 0. So we don't really need delta ?? More "noise"
- 
-  subplot(1,2,1);imshow(I);% hold on; contour(phi0,'b');
-  hold on;
-  contour(phi, [0 0], 'r');
-  title([num2str(n) '/' num2str(its) ' Iterations']); 
-  hold off;
-  drawnow;
+    % Evolution
+    %c1 = sum(sum(I.*H))/(sum(sum(phi>=0))+eps); % equation (6)
+    %c2 = sum(sum(I.*(1-H)))/(sum(sum(phi<0))+eps); % equation (7)
+    Idub = im2double(double(I));
+    c1 = sum(sum(Idub.*H))/(length(find(phi>=0))+eps); % equation (6)
+    c2 = sum(sum(Idub.*(1-H)))/(length(find(phi<0))+eps); % equation (7)
+    F = (mu*K-(Idub-c1).^2+(Idub-c2).^2); % equation (9)
+    F = F./max(max(abs(F)));
 
-  Energy(n) = norm(D.*F,2);
+    phi = phi+dt.*D.*F;
+    %phi = phi+dt*F; %This could work by equation (9) = 0. So we don't really need delta ?? More "noise"
+
+    subplot(1,2,1);imshow(I);% hold on; contour(phi0,'b');
+    hold on;
+    contour(phi, [0 0], 'r');
+    title([num2str(n) '/' num2str(its) ' Iterations']);
+    hold off;
+    drawnow;
+
+    Energy(n) = norm(D.*F,2);
 
 end
 imshow(I); %hold on; contour(phi0,'b');
 hold on;
 contour(phi, [0 0], 'r');
-title([num2str(n) '/' num2str(its) ' Iterations']); 
+title([num2str(n) '/' num2str(its) ' Iterations']);
 hold off;
 
 %Segmented image
-segment = phi>0; 
+segment = phi>0;
 
 subplot(1,2,2); imshow(segment); title('Segmented Image');
 
-figure(); plot(Energy);
+%figure(); plot(Energy);
